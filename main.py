@@ -2,17 +2,22 @@ from check_registration import ECR
 from check_registration import connecting_to_ecr
 from check_registration import logs_file_path
 from fixed_data import kkt_tags
+import datetime as dt
 
 def check_tags(document, required_tags):
     # функция проверки вхождения тега в ЭФ чека
-    print(f'Проверка тегов в документе {document.split('\n')[0]}')
+    current_doc = document.split('\n')[0]
+    print(f'Проверка тегов в документе {current_doc}')
     with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
         log.seek(0, 2)
-        for tag in required_tags:
-            if str(tag) in document:
-                log.write(f'Тег {tag} есть в чеке\n')
-            else:
-                log.write(f'ERROR!!! Тега {tag} нет в чеке !!!\n')
+        with open('ERROR.txt', 'w+') as errlog:
+            # errlog.write(dt.datetime.now())
+            for tag in required_tags:
+                if str(tag) in document:
+                    log.write(f'Тег {tag} есть в чеке\n')
+                else:
+                    log.write(f'ERROR!!! Тега {tag} нет в чеке !!!\n')
+                    errlog.write(f'{dt.datetime.now()} : ERROR!!! Тега {tag} нет в чеке {current_doc}!!!\n')
 
 def main():
 
