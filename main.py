@@ -10,8 +10,8 @@ def check_tags(document, required_tags):
     print(f'Проверка тегов в документе {current_doc}')
     with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
         log.seek(0, 2)
-        with open('ERROR.txt', 'w+') as errlog:
-            # errlog.write(dt.datetime.now())
+        with open('ERROR.txt', 'r+') as errlog:
+            errlog.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
             for tag in required_tags:
                 if str(tag) in document:
                     log.write(f'Тег {tag} есть в чеке\n')
@@ -20,6 +20,8 @@ def check_tags(document, required_tags):
                     errlog.write(f'{dt.datetime.now()} : ERROR!!! Тега {tag} нет в чеке {current_doc}!!!\n')
 
 def main():
+    with open('ERROR.txt', 'w+') as errlog:
+        errlog.write(f'{dt.datetime.now()} : Начало теста\n')
 
     ECROnTest = ECR()
 
@@ -42,6 +44,10 @@ def main():
 
     calculation_state_report = ECROnTest.calculation_state_report()
     check_tags(calculation_state_report, kkt_tags.otchet_o_sost_rasch_tags)
+
+    with open('ERROR.txt', 'r+') as errlog:
+        errlog.seek(0, 2)
+        errlog.write(f'{dt.datetime.now()} : Конец теста\n')
 
 
 if __name__ == '__main__':
