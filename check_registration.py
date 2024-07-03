@@ -104,6 +104,10 @@ class ECR:
                 fr.BarCode = qr
                 fr.ItemStatus = 1
                 fr.FNSendItemBarcode()
+                time.sleep(0.5)
+                print(f'Передача марки, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+                log.write(
+                    f'{dt.datetime.now()}: Передача марки, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
 
                 fr.TagNumber = 1262 # ИД. ФОИВ
                 fr.TagType = 7
@@ -126,7 +130,7 @@ class ECR:
                 fr.FNCloseCheckEx()
                 time.sleep(3)  # задержка - даем время на печать на всякий случай
                 log.write(
-                    f'{dt.datetime.now()}: Регистрация простого чека, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+                    f'{dt.datetime.now()}: Регистрация чека с маркировкой, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
                 result = self._get_cheque_from_fn()
                 log.write(f'Получен чек \n{result}')
                 fr.Disconnect()
@@ -174,6 +178,10 @@ class ECR:
                 f'{dt.datetime.now()}: Отчет о регистрации, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
             log.write(f'Получен чек \n{result}\n')
         return result  # возвращаем документ из ФН в виде строки
+
+    def cheque_correction(self):
+        pass
+
 
 
 if __name__ == '__main__':
