@@ -39,6 +39,9 @@ def main():
     cheque_with_marking = ECROnTest.fn_operation_with_marking()
     check_tags(cheque_with_marking, kkt_tags.cheque_with_marking)
 
+    cheque_correction = ECROnTest.cheque_correction()
+    check_tags(cheque_correction, kkt_tags.cheque_correction)
+
     close_session_cheque = ECROnTest.close_session()
     check_tags(close_session_cheque, kkt_tags.close_session_tags)
 

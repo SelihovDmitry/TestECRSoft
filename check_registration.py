@@ -104,7 +104,7 @@ class ECR:
                 fr.BarCode = qr
                 fr.ItemStatus = 1
                 fr.FNSendItemBarcode()
-                time.sleep(0.5)
+                time.sleep(1)
                 print(f'Передача марки, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
                 log.write(
                     f'{dt.datetime.now()}: Передача марки, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
@@ -179,8 +179,33 @@ class ECR:
             log.write(f'Получен чек \n{result}\n')
         return result  # возвращаем документ из ФН в виде строки
 
-    def cheque_correction(self):
-        pass
+    def cheque_correction(self, price=1.11, quantity=1):
+        # метод пробития чека на ККТ, возвращает текст чека из ФН
+        print('Регистрируется чек коррекции')
+        self.price = price
+        self.quantity = quantity
+
+        with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
+            log.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
+            fr.GetECRStatus()  # проверяем режим ККТ, если не 2 - выходим
+            if fr.ECRMode == 2:
+                fr.CheckType = 0
+                fr.FNOpenCheckCorrection()
+                fr.price = self.price
+                fr.quantity = self.quantity
+                fr.FNOperation()
+
+                fr.Summ1 = 100
+                fr.FNCloseCheckEx()
+                time.sleep(3)  # задержка - даем время на печать на всякий случай
+                log.write(
+                    f'{dt.datetime.now()}: Регистрация чека коррекции, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+                result = self._get_cheque_from_fn()
+                log.write(f'Получен чек \n{result}')
+                fr.Disconnect()
+                return result
+            else:
+                return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
 
 
 
