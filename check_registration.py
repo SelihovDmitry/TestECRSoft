@@ -7,6 +7,8 @@ import time
 
 fr = Dispatch('Addin.DRvFR')
 
+wait_cheque_timeout = 1 # время задержки для печати чека, может и не нужно если используем WaitForPrinting
+
 print('Начало работы, подключение к ККТ')
 
 # log_file_name = 'log_' + dt.datetime.isoformat(dt.datetime.now(), sep='_')[:-7] + '.txt'
@@ -26,12 +28,16 @@ def connecting_to_ecr():
             fr.ReadTable()
             log.write(
                 f'{dt.datetime.now()}: Подключение к ККТ з\н {fr.ValueOfFieldString}, код ошибки: {fr.resultcode}, {fr.resultcodedescription}\n')
+            print(f'ККТ з\н {fr.ValueOfFieldString}, код ошибки: {fr.resultcode}, {fr.resultcodedescription}')
             fr.GetDeviceMetrics()
             log.write(
                 f'{dt.datetime.now()}: Модель ККТ {fr.UDescription}, прошивка {fr.ECRSoftVersion} от {dt.datetime.date(fr.ECRSoftDate)}\n')
+            print(f'Модель ККТ {fr.UDescription}, прошивка {fr.ECRSoftVersion} от {dt.datetime.date(fr.ECRSoftDate)}')
+            return True
         else:
-            print(fr.resultcode)
+            print(f'Подключение не удалось, код ошибки: {fr.resultcode}, {fr.resultcodedescription}')
             log.write(f'{dt.datetime.now()}: Подключение не удалось, код ошибки: {fr.resultcode}, {fr.resultcodedescription}\n')
+            return False
 
 
 class ECR:
@@ -47,12 +53,13 @@ class ECR:
 
     def open_session(self):
         # метод открытия смены
-        print('Регистрируется чек открытия смены')
+        print('Регистрируется чек открытия смены. ', end='')
         with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
             log.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
             fr.OpenSession()
-            time.sleep(3) # задержка - даем время на печать на всякий случай
+            time.sleep(wait_cheque_timeout) # задержка - даем время на печать на всякий случай
             log.write(f'{dt.datetime.now()}: Открытие смены, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+            print(f'Код ошибки {fr.resultcode}, {fr.resultcodedescription}')
             result = self._get_cheque_from_fn()
             log.write(f'Получен чек \n{result}')
             fr.Disconnect()
@@ -73,12 +80,130 @@ class ECR:
                 fr.FNOperation()
 
                 fr.Summ1 = 100
+                fr.CustomerEmail = 'buyer@mail.ru'
+                fr.FNSendCustomerEmail()
                 fr.FNCloseCheckEx()
-                time.sleep(3)  # задержка - даем время на печать на всякий случай
+                fr.WaitForPrinting()
+                time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
                 log.write(
                     f'{dt.datetime.now()}: Регистрация простого чека, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
                 result = self._get_cheque_from_fn()
                 log.write(f'Получен чек \n{result}')
+                fr.Disconnect()
+                return result
+            else:
+                return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
+
+    def cheque_with_agent_data(self):
+        # проверка возможности передачи кассового чека с данными агента и поставщика (теги 1223, 1224)
+
+
+        print(f'Регистрируется кассовый чек с данными агента и поставщика (теги 1223, 1224)', end='')
+        with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
+            log.seek(0, 2)  # перемещаем курсор на последнюю строку файла - для ДОзаписи вниз
+            fr.GetECRStatus() # проверяем режим ККТ, если не 2 - выходим
+            if fr.ECRMode == 2:
+                fr.price = 1.11
+                fr.quantity = 1
+                fr.CheckType = 1
+                fr.Tax1 = 1
+                fr.StringForPrinting = 'Товар'
+                fr.FNOperation()
+
+
+                # передача тега 1226 - ИНН ПОСТАВЩИКА
+                fr.TagNumber = 1226  # ИНН ПОСТАВЩИКА
+                fr.TagType = 7
+                fr.TagValueStr = '7713076301'
+                fr.FNSendTagOperation()
+
+                #передача тега 1223 - Данные агента
+                fr.TagNumber = 1223
+                fr.FNBeginSTLVTag()
+                fr.TagNumber = 1075  # ТЛФ. ОП. ПЕРЕВОДА
+                fr.TagType = 7
+                fr.TagValueStr = '+74951234567'
+                fr.FNAddTag()
+                fr.TagNumber = 1044  # ОП. АГЕНТА
+                fr.TagType = 7
+                fr.TagValueStr = "4563"
+                fr.FNAddTag()
+                fr.TagNumber = 1073  # ТЛФ. ПЛ. АГЕНТА
+                fr.TagType = 7
+                fr.TagValueStr = "+74955683398"
+                fr.FNAddTag()
+                fr.TagNumber = 1074  # ТЛФ. ОП. ПР. ПЛАТЕЖА
+                fr.TagType = 7
+                fr.TagValueStr = '+78009009999'
+                fr.FNAddTag()
+                fr.TagNumber = 1026  # ОПЕРАТОР ПЕРЕВОДА
+                fr.TagType = 7
+                fr.TagValueStr = "КБ ННТ БАНК"
+                fr.FNAddTag()
+                fr.TagNumber = 1005  # АДР. ОП. ПЕРЕВОДА
+                fr.TagType = 7
+                fr.TagValueStr = "Москва Ул. Вавилова д.15"
+                fr.FNAddTag()
+                fr.TagNumber = 1016  # ИНН ОП. ПЕРЕВОДА
+                fr.TagType = 7
+                fr.TagValueStr = "7812014560"
+                fr.FNAddTag()
+                fr.FNSendSTLVTagOperation()
+
+                # передача тега 1224 - Данные поставщика
+                fr.TagNumber = 1224
+                fr.FNBeginSTLVTag()
+                fr.TagNumber = 1171  # ТЛФ. ПОСТ.
+                fr.TagType = 7
+                fr.TagValueStr = "+78007008888"
+                fr.FNAddTag()
+                fr.TagNumber = 1225  # НАИМЕН. ПОСТАВЩИКА
+                fr.TagType = 7
+                fr.TagValueStr = "Поставщик поставок."
+                fr.FNAddTag()
+                fr.FNSendSTLVTagOperation()
+
+                # передача тега 1222 - ПРИЗН. АГ. ПО ПРЕДМ. РАСЧ
+                fr.TagNumber = 1222  # АДР. ЭЛ. ПОЧТЫ ОТПРАВ. ЧЕКА
+                fr.TagType = 0
+                fr.TagValueInt = 64
+                fr.FNSendTagOperation()
+
+                # передача тега 1191 - дополнительный реквизит предмета расчета
+                fr.TagNumber = 1191  # АДР. ЭЛ. ПОЧТЫ ОТПРАВ. ЧЕКА
+                fr.TagType = 7
+                fr.TagValueStr = 'Это я ! Тег 1191, доп. реквизит предм. расчета'
+                fr.FNSendTagOperation()
+
+                # передача тега 1117 - АДР. ЭЛ. ПОЧТЫ ОТПРАВ. ЧЕКА
+                fr.TagNumber = 1117  # АДР. ЭЛ. ПОЧТЫ ОТПРАВ. ЧЕКА
+                fr.TagType = 7
+                fr.TagValueStr = "sender@123.ru"
+                fr.FNSendTag()
+
+                if fr.ResultCode != 0:
+                    print(f' - код ошибки {fr.resultcode}, {fr.resultcodedescription}')
+                    fr.CancelCheck()
+                    return
+
+                fr.Summ1 = 100
+                fr.CustomerEmail = 'buyer@mail.ru'
+                fr.FNSendCustomerEmail()
+                # fr.EmailAddress = 'sender@mail.ru'
+                # fr.FNSendSenderEmail()
+                fr.FNCloseCheckEx()
+                fr.WaitForPrinting()
+                time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
+                log.write(
+                    f'{dt.datetime.now()}: Регистрация чека с данными агента и поставщика (теги 1223, 1224). Код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+                if fr.resultcode == 0:
+                    print('     -  OK')
+                    result = self._get_cheque_from_fn()
+                    log.write(f'Получен чек \n{result}\n')
+                    return result
+                else:
+                    print(f' - код ошибки {fr.resultcode}, {fr.resultcodedescription}')
+                    fr.CancelCheck()
                 fr.Disconnect()
                 return result
             else:
@@ -127,12 +252,93 @@ class ECR:
                 fr.FNSendTagOperation()
 
                 fr.Summ1 = 100
+                fr.CustomerEmail = 'buyer@mail.ru'
+                fr.FNSendCustomerEmail()
                 fr.FNCloseCheckEx()
-                time.sleep(3)  # задержка - даем время на печать на всякий случай
+                fr.WaitForPrinting()
+                time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
                 log.write(
                     f'{dt.datetime.now()}: Регистрация чека с маркировкой, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
                 result = self._get_cheque_from_fn()
                 log.write(f'Получен чек \n{result}')
+                fr.Disconnect()
+                return result
+            else:
+                return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
+
+    def cheque_with_customer_data(self):
+        # проверка возможности передачи кассового чека с данными покупателя, тег 1256
+        # customer_document_types = [21,22,26,27,28,31,32,33,34,35,36,37,38,40]
+
+        # for customer_document_type in customer_document_types:
+        print(f'Регистрируется кассовый чек с передачей данных покупателя (тег 1256) ', end='')
+        with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
+            log.seek(0, 2)  # перемещаем курсор на последнюю строку файла - для ДОзаписи вниз
+            fr.GetECRStatus() # проверяем режим ККТ, если не 2 - выходим
+            if fr.ECRMode == 2:
+                fr.price = 1.11
+                fr.quantity = 1
+                fr.tax1 = 1
+                fr.CheckType = 1
+                fr.StringForPrinting = 'Товар'
+                fr.FNOperation()
+
+
+                fr.TagNumber = 1256
+                fr.FNBeginSTLVTag()
+                fr.TagNumber = 1227  # покупатель
+                fr.TagType = 7
+                fr.TagValueStr = 'Иванов И.И.'
+                fr.FNAddTag()
+                fr.TagNumber = 1228  # ИНН покупателя
+                fr.TagType = 7
+                fr.TagValueStr = '772770224286'
+                fr.FNAddTag()
+                fr.TagNumber = 1243  # дата рождения покупателя
+                fr.TagType = 7
+                fr.TagValueStr = "14.01.2000"
+                fr.FNAddTag()
+                fr.TagNumber = 1244  # гражданство
+                fr.TagType = 7
+                fr.TagValueStr = "643"
+                fr.FNAddTag()
+                fr.TagNumber = 1245  # код вида док. удост. лич.
+                fr.TagType = 7
+                fr.TagValueStr = 21
+                fr.FNAddTag()
+                fr.TagNumber = 1246  # данные док. удост. лич.
+                fr.TagType = 7
+                fr.TagValueStr = "4004 12345678 выдан МВД 16.07.2016"
+                fr.FNAddTag()
+                fr.TagNumber = 1254  # адрес покупателя
+                fr.TagType = 7
+                fr.TagValueStr = "г. Москва, Маросейка 12, кв 1."
+                fr.FNAddTag()
+                fr.FNSendSTLVTag()
+                if fr.ResultCode != 0:
+                    print(f' - код ошибки {fr.resultcode}, {fr.resultcodedescription}')
+                    fr.CancelCheck()
+                    return
+
+                fr.Summ1 = 100
+                fr.CustomerEmail = 'buyer@mail.ru'
+                fr.FNSendCustomerEmail()
+                fr.EmailAddress = 'sender@mail.ru'
+                fr.FNSendSenderEmail()
+                fr.FNCloseCheckEx()
+                fr.WaitForPrinting()
+                time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
+                log.write(
+                    f'{dt.datetime.now()}: Регистрация чека с передачей данных покупателя (тег 1256) '
+                    f'. Код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+                if fr.resultcode == 0:
+                    print('     -  OK')
+                    result = self._get_cheque_from_fn()
+                    log.write(f'Получен чек \n{result}\n')
+                    # return result
+                else:
+                    print(f' - код ошибки {fr.resultcode}, {fr.resultcodedescription}')
+                    fr.CancelCheck()
                 fr.Disconnect()
                 return result
             else:
@@ -144,7 +350,7 @@ class ECR:
         with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
             log.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
             fr.FNCloseSession()
-            time.sleep(3)  # задержка - даем время на печать на всякий случай
+            time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
             log.write(f'{dt.datetime.now()}: Закрытие смены, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
             result = self._get_cheque_from_fn()
             log.write(f'Получен чек \n{result}')
@@ -157,7 +363,9 @@ class ECR:
         with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
             log.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
             fr.FNBuildCalculationStateReport()
-            time.sleep(3)  # задержка - даем время на печать на всякий случай
+            fr.WaitForPrinting()
+            time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
+            time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
             log.write(f'{dt.datetime.now()}: Отчет о состоянии расчетов, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
             result = self._get_cheque_from_fn()
             log.write(f'Получен чек \n{result}\n')
@@ -170,7 +378,7 @@ class ECR:
         fr.DocumentNumber = 1
         fr.ShowTagNumber = True
         fr.FNGetDocumentAsString()
-        time.sleep(1)
+        time.sleep(wait_cheque_timeout)
         result = fr.StringForPrinting
         with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
             log.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
@@ -197,7 +405,7 @@ class ECR:
 
                 fr.Summ1 = 100
                 fr.FNCloseCheckEx()
-                time.sleep(3)  # задержка - даем время на печать на всякий случай
+                time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
                 log.write(
                     f'{dt.datetime.now()}: Регистрация чека коррекции, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
                 result = self._get_cheque_from_fn()
@@ -211,6 +419,7 @@ class ECR:
 
 if __name__ == '__main__':
     print('Hello you in module check_registration')
+    connecting_to_ecr()
     ShtrihZnak = ECR()
     # print
-    print(ShtrihZnak.registration_report())
+    print(ShtrihZnak.cheque_with_customer_data())

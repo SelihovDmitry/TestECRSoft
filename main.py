@@ -11,7 +11,7 @@ def check_tags(document, required_tags):
     with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
         log.seek(0, 2)
         with open('ERROR.txt', 'r+') as errlog:
-            errlog.seek(0, 2)  # перемещаем курсор на последжнюю строку файла - для ДОзаписи вниз
+            errlog.seek(0, 2)  # перемещаем курсор на последнюю строку файла - для ДОзаписи вниз
             for tag in required_tags:
                 if str(tag) in document:
                     log.write(f'Тег {tag} есть в чеке\n')
@@ -39,6 +39,12 @@ def main():
     cheque_with_marking = ECROnTest.fn_operation_with_marking()
     check_tags(cheque_with_marking, kkt_tags.cheque_with_marking)
 
+    cheque_with_agent_data = ECROnTest.cheque_with_agent_data()
+    check_tags(cheque_with_agent_data, kkt_tags.agent_data)
+
+    cheque_with_customer_data = ECROnTest.cheque_with_customer_data()
+    check_tags(cheque_with_customer_data, kkt_tags.cheque_with_customer_data)
+
     cheque_correction = ECROnTest.cheque_correction()
     check_tags(cheque_correction, kkt_tags.cheque_correction)
 
@@ -54,5 +60,18 @@ def main():
 
 
 if __name__ == '__main__':
+    start_time = dt.datetime.now()
     print('Hello you in module main')
+
     main()
+    # ECROnTest = ECR()
+    # connecting_to_ecr()
+    # Test1 = ECROnTest.open_session()
+    # check_tags(Test1, kkt_tags.open_session_tags)
+
+    stop_time = dt.datetime.now()
+    test_time = str(stop_time - start_time)[:-7]  # переводим в строку и обрезаем микросекунды
+    print(f'Отчет окончен. Время теста {test_time}')
+    with open(logs_file_path, 'r+') as log:  # r+ - открытие файла на чтение и изменение
+        log.seek(0, 2)  # перемещаем курсор на последнюю строку файла - для ДОзаписи вниз
+        log.write(f'\nОтчет окончен. Время теста {test_time}\n')
