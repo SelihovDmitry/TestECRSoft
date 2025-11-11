@@ -132,6 +132,68 @@ def check_different_fonts_and_pattern(number_of_positions=1, product_name='То�
                     return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
     fr.Disconnect()
 
+def check_different_fonts_and_pattern_ffd_1_05(number_of_positions=1, product_name='Товар', current_font=1, price=10, quantity=1):
+    # пробитие чеков с разными шаблонами и шрифтами
+    print(2)
+    for compact_header in range(7): # перебираем компактные заголовки от 0 до 9
+        # записываем значение компактного заголовка в Т17П12
+        fr.TableNumber = 17
+        fr.RowNumber = 1
+        fr.FieldNumber = 18
+        fr.ValueOfFieldInteger = compact_header
+        fr.WriteTable()
+        if fr.resultcode != 0:
+            print('After WriteTable ', fr.resultcode, fr.resultcodedescription)
+            fr.Disconnect()
+            return
+
+        print(f'Пробиваем чек шрифтом {current_font} с компактным заголовком {compact_header}')
+        fr.StringForPrinting = '*************************'
+        fr.PrintString()
+        fr.StringForPrinting = f'ПРОБИВАЕМ ЧЕК ШРИФТОМ ------ {current_font}'
+        fr.PrintString()
+        fr.StringForPrinting = f'с компактным заголовком ---- {compact_header}'
+        fr.PrintString()
+        fr.StringForPrinting = '*************************'
+        fr.PrintString()
+
+        fr.GetECRStatus()
+        if fr.ECRMode == 2:
+            fr.OpenCheck()
+            if fr.resultcode != 0:
+                print('After OpenCheck ', fr.resultcode, fr.resultcodedescription)
+                fr.Disconnect()
+                return
+
+            fr.CustomerEmail = 'buyer@mail.ru' # передаем email покупателя чтобы чек не печатался.
+            fr.FNSendCustomerEmail()
+
+            for i in range(number_of_positions):
+                fr.StringForPrinting = product_name
+                fr.price = 1
+                fr.quantity = 1
+                fr.PaymentItemSign = 1
+                fr.FNOperation()
+                if fr.resultcode != 0:
+                    print('After FNOperation ', fr.resultcode, fr.resultcodedescription)
+                    fr.Disconnect()
+                    return
+
+            fr.Summ1 = 100
+            fr.PaymentTypeSign = 4  # ПризнакСпособаРасчета
+            fr.StringForPrinting = ''
+            fr.FNCloseCheckEx()
+            print(f'====Закрытие чека с компактным заголовком {compact_header} ====\n{number_of_positions} позиций, '
+                  f'код ошибки {fr.resultcode}, {fr.resultcodedescription}')
+            if fr.resultcode != 0:
+                print('After FNCloseCheckEx ', fr.resultcode, fr.resultcodedescription)
+                fr.CancelCheck()
+            fr.WaitForPrinting()
+            # time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
+        else:
+            return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
+    fr.Disconnect()
+
 def check_with_new_tax(Tax):
     if fr.ECRMode == 2 or fr.ECRMode == 8:
         fr.StringForPrinting = 'Наименование товара'
@@ -154,10 +216,11 @@ def check_with_new_tax(Tax):
 
 
 def main():
-    fonts = [1]
+    fonts = [1,10,11]
     for font in fonts:
         write_fonts_in_table(font)
-        check_different_fonts_and_pattern(number_of_positions=1, product_name='Наименование товара', current_font=font)
+        print(1)
+        check_different_fonts_and_pattern_ffd_1_05(number_of_positions=1, product_name='Наименование товара', current_font=font)
 
 
 if __name__ == '__main__':

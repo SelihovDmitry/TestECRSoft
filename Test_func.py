@@ -161,6 +161,47 @@ def many_fn_operation_minimal_check(number_of_positions=1, product_name='Тов�
         else:
             return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
 
+def test_power_unit(number_of_positions=1, product_name='Товар', price=10, quantity=1):
+    # пробитие чека с печатью логотипа
+    print(f'Регистрируется кассовый чек с минимальными данными с кол-вом позиций {number_of_positions}')
+
+
+    fr.GetECRStatus()
+    if fr.ECRMode == 2 or fr.ECRMode == 8:
+        fr.OpenCheck()
+        if fr.resultcode != 0:
+            print('After OpenCheck ', fr.resultcode, fr.resultcodedescription)
+            fr.Disconnect()
+            return
+
+        fr.Draw()
+        fr.CustomerEmail = 'buyer@mail.ru' # передаем email покупателя чтобы чек не печатался.
+        fr.FNSendCustomerEmail()
+
+        for i in range(number_of_positions):
+            fr.StringForPrinting = product_name
+            fr.price = 1
+            fr.quantity = 1
+            fr.PaymentItemSign = 1
+            fr.FNOperation()
+            print(f'регистрация позиции {i + 1}, код ошибки {fr.resultcode}, {fr.resultcodedescription}\n')
+            if fr.resultcode != 0:
+                print('After FNOperation ', fr.resultcode, fr.resultcodedescription)
+                fr.Disconnect()
+                return
+
+        fr.Summ1 = 100000
+        fr.PaymentTypeSign = 4  # ПризнакСпособаРасчета
+        fr.FNCloseCheckEx()
+        fr.WaitForPrinting()
+        time.sleep(wait_cheque_timeout)  # задержка - даем время на печать на всякий случай
+        print(
+            f'=============Закрытие чека==============\n{number_of_positions} позиций, код ошибки {fr.resultcode}, {fr.resultcodedescription}')
+        fr.Disconnect()
+        return
+    else:
+        return print(f'ККТ не в режиме 2, режим ККТ: {fr.ECRMode}')
+
 
 if __name__ == '__main__':
 
